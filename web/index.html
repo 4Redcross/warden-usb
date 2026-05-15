@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Warden — USB Security</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Vendor (download once with setup_web.py) -->
+  <script src="vendor/react.production.min.js"></script>
+  <script src="vendor/react-dom.production.min.js"></script>
+  <script src="vendor/babel.min.js"></script>
+  <script src="vendor/qrcodejs.min.js"></script>
+
+  <!-- App JSX — loaded in dependency order -->
+  <script type="text/babel" data-presets="react" src="icons.jsx"></script>
+  <script type="text/babel" data-presets="react" src="chrome.jsx"></script>
+  <script type="text/babel" data-presets="react" src="scan.jsx"></script>
+  <script type="text/babel" data-presets="react" src="host.jsx"></script>
+  <script type="text/babel" data-presets="react" src="format.jsx"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx"></script>
+</body>
+</html>

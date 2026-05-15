@@ -1,0 +1,44 @@
+Design a high-fidelity desktop application UI called Warden — a USB drive security tool for Windows and Linux. The app uses PySide6 (Qt) so the design should feel like a native dark-mode desktop app, not a web app.
+
+Visual style
+
+Dark theme: background #101014 , surface/cards #131217, secondary color #7c2eec, accent color #b6df6d
+60-30-10 colour rule — dark bg dominates, cards are slightly lighter, blue is used sparingly for CTAs and highlights
+Font: Segoe UI, clean and modern
+Rounded cards (8px radius), subtle borders, no heavy shadows
+Feels professional and security-focused — think a cross between a sysadmin tool and a modern SaaS dashboard
+Layout
+
+Fixed-width desktop window (~1100×760px)
+Top header bar: app name "Warden" on the left, a drive selector dropdown in the centre-right, a refresh icon button, a theme toggle (☀/🌙), and an "Update Rules" button
+Three tabs below the header: Scan, Host, Format
+Status bar at the bottom showing selected drive info
+Scan tab (primary tab — show this as the hero screen)
+
+A card at the top with the selected drive name/size, three checkboxes inline (ClamAV, YARA rules, VirusTotal hash lookup), and a prominent "Scan Drive" button
+A summary row beneath showing: Files scanned / Threats found / Duration — with a green "Clean" or red "X Threat(s)" badge
+A "Detected Threats" table (File, Threat name, Engine, Severity level)
+A "Quarantine" section below with a table listing quarantined files, each row having action buttons: VT Hash, VT Upload, Restore, Delete
+Host tab
+
+Server config card: port input, "Localhost only" checkbox, username/password fields with a "Generate" button, HTTPS toggle
+"Start Server" button
+Once started: shows the WebDAV URL in monospace, a QR code beside it, and plain-English connection instructions for Windows / macOS / Android
+Format tab
+
+Drive info at top
+Filesystem selector (NTFS, FAT32, exFAT), volume label input, quick format checkbox
+A large warning banner in amber before the destructive "Format Drive" button
+Accent colours for status
+
+Clean/success: #2faa6c
+Threat/danger: #e75a5a
+Warning: #ebcc42
+Muted text: #666a7a
+Show the Scan tab as the main screen, ideally with some mock data in the threats table and quarantine section so it looks populated and realistic.
+
+
+
+```
+cd C:\D_drive\Projects\usb-sanitizer-tool; .venv\Scripts\activate; python dev.py
+```
