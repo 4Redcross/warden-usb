@@ -22,13 +22,11 @@ from core.audit import AuditLog
 from core.fileserver import FileServer
 from core.formatter import Formatter
 from core.models import DriveInfo, FormatJob
-from core.monitor import DriveMonitor
 from core.quarantine import QuarantineManager
 from core.scanner import Scanner
 from core.virustotal import VirusTotalClient
 from core.yara_engine import YaraEngine
 from workers.format_worker import FormatWorker
-from workers.monitor_worker import MonitorWorker
 from workers.scan_worker import ScanWorker
 from workers.server_worker import ServerWorker
 
@@ -39,7 +37,6 @@ class WardenApi:
         scanner: Scanner,
         formatter: Formatter,
         file_server: FileServer,
-        drive_monitor: DriveMonitor,
         backend: DriveBackend,
         audit: AuditLog,
         yara_engine: YaraEngine,
@@ -61,7 +58,6 @@ class WardenApi:
         self._scan_worker: ScanWorker | None = None
         self._server_worker: ServerWorker | None = None
         self._format_worker: FormatWorker | None = None
-        self._monitor_worker: MonitorWorker | None = None
         self._drives: list[DriveInfo] = []
 
     # ── Window reference (set after webview.create_window) ────────────────────
@@ -117,14 +113,10 @@ class WardenApi:
 
     def _start_monitor(self) -> None:
         try:
-            self._monitor_worker = MonitorWorker(
-                self._backend._monitor if hasattr(self._backend, "_monitor") else None,
+            self._backend.start_monitoring(
                 on_connect=lambda d: self._push("drive:connected", self._drive_dict(d)),
                 on_disconnect=lambda p: self._push("drive:disconnected", {"path": p}),
             )
-            # Only start if monitor is available
-            if self._monitor_worker._monitor:
-                self._monitor_worker.start()
         except Exception:
             pass
 

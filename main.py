@@ -8,7 +8,6 @@ from config.settings import Settings
 from core.audit import AuditLog
 from core.fileserver import FileServer
 from core.formatter import Formatter
-from core.monitor import DriveMonitor
 from core.quarantine import QuarantineManager
 from core.scanner import Scanner
 from core.virustotal import VirusTotalClient
@@ -57,13 +56,11 @@ def main() -> None:
     backend      = _get_backend()
     formatter    = Formatter(backend, audit)
     file_server  = FileServer(settings.cert_dir)
-    drive_monitor = DriveMonitor(backend)
 
     warden_api = WardenApi(
         scanner=scanner,
         formatter=formatter,
         file_server=file_server,
-        drive_monitor=drive_monitor,
         backend=backend,
         audit=audit,
         yara_engine=yara,
