@@ -177,16 +177,26 @@ class WardenApi:
         entries = self._quarantine.list_entries()
         return [self._quarantine_dict(e) for e in entries]
 
-    def quarantine_file(self, file_path: str, threat_name: str, engine: str) -> dict:
+    def quarantine_file(
+        self, file_path: str, threat_name: str, engine: str, sha256: str = ""
+    ) -> dict:
         try:
-            from core.models import ThreatInfo, ThreatLevel
-            ti = ThreatInfo(
-                file_path=Path(file_path),
-                threat_name=threat_name,
-                detected_by=engine,
-                threat_level=ThreatLevel.MALICIOUS,
+            from core.models import ThreatLevel
+            from core.virustotal import sha256_of_file
+            src = Path(file_path)
+            if not sha256:
+                try:
+                    sha256 = sha256_of_file(src)
+                except OSError:
+                    sha256 = ""
+            self._quarantine.quarantine(
+                src,
+                threat_name,
+                engine,
+                sha256,
+                ThreatLevel.MALICIOUS,
             )
-            self._quarantine.quarantine(ti)
+            self._audit.log_quarantine(file_path, sha256, threat_name)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -194,7 +204,9 @@ class WardenApi:
     def quarantine_all(self, threats: list[dict]) -> dict:
         ok, failed = 0, 0
         for t in threats:
-            r = self.quarantine_file(t["path"], t["threat"], t["engine"])
+            r = self.quarantine_file(
+                t["path"], t["threat"], t["engine"], t.get("sha256", "")
+            )
             if r.get("ok"):
                 ok += 1
             else:
@@ -232,8 +244,8 @@ class WardenApi:
             entry = self._quarantine.get_entry(entry_id)
             if not entry:
                 return {"ok": False, "error": "Entry not found"}
-            result = self._vt.lookup_hash(entry.sha256)
-            self._quarantine.update_vt_hash(entry_id, result)
+            result = self._vt.hash_lookup(entry.sha256)
+            self._quarantine.update_vt_results(entry_id, hash_result=result)
             return {"ok": True, "result": result}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -246,7 +258,7 @@ class WardenApi:
             if not entry:
                 return {"ok": False, "error": "Entry not found"}
             result = self._vt.upload_file(entry.quarantine_path)
-            self._quarantine.update_vt_full(entry_id, result)
+            self._quarantine.update_vt_results(entry_id, full_result=result)
             return {"ok": True, "result": result}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -410,6 +422,8 @@ class WardenApi:
             ok = self._yara.download_rules(
                 progress_cb=lambda p: self._push("rules:progress", {"pct": p})
             )
+            if ok:
+                self._settings.set("rules_last_updated", datetime.now().isoformat())
             self._push("rules:done", {"ok": ok})
 
         threading.Thread(target=_run, daemon=True).start()
@@ -426,6 +440,8 @@ class WardenApi:
             "use_yara": self._settings.get("scan.use_yara", True),
             "use_vt_hash": self._settings.get("scan.use_vt_hash", False),
             "has_vt_key": bool(self._settings.get_vt_api_key()),
+            "keyring_available": self._settings.keyring_available,
+            "rules_last_updated": self._settings.get("rules_last_updated"),
             "server_available": self._file_server.is_available(),
             "platform": sys.platform,
             "filesystems": filesystems,
@@ -434,10 +450,48 @@ class WardenApi:
     def set_theme(self, theme: str) -> None:
         self._settings.theme = theme
 
+    # ── VirusTotal API key ────────────────────────────────────────────────────
+
+    def set_vt_key(self, key: str) -> dict:
+        """Verify a VirusTotal API key, then persist it to the OS credential
+        vault and inject a fresh client at runtime. The key is never logged."""
+        key = (key or "").strip()
+        if not key:
+            return {"ok": False, "error": "API key is empty"}
+        client = VirusTotalClient(key)
+        check = client.verify()
+        if not check.get("ok"):
+            return {"ok": False, "error": check.get("error", "Verification failed")}
+        self._settings.set_vt_api_key(key)
+        self._vt = client
+        self._scanner.vt_client = client
+        return {"ok": True}
+
+    def clear_vt_key(self) -> dict:
+        try:
+            self._settings.delete_vt_api_key()
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        self._vt = None
+        self._scanner.vt_client = None
+        return {"ok": True}
+
     def get_audit_log(self) -> str:
-        if hasattr(self._audit, "recent_text"):
-            return self._audit.recent_text()
-        return ""
+        try:
+            entries = self._audit.read_all()
+        except Exception:
+            return ""
+        lines = []
+        for e in entries[-200:]:
+            ts = str(e.get("ts", "")).replace("T", " ")
+            ts = ts.split(".")[0].split("+")[0]
+            event = str(e.get("event", "")).upper()
+            fields = " ".join(
+                f"{k}={v}" for k, v in e.items() if k not in ("ts", "event")
+            )
+            lines.append(f"{ts}  {event:<10} {fields}".rstrip())
+        lines.reverse()  # newest first
+        return "\n".join(lines)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

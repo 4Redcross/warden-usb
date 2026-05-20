@@ -48,6 +48,27 @@ class VirusTotalClient:
         except requests.RequestException:
             return None
 
+    def verify(self) -> dict:
+        """Check whether the API key is accepted by VirusTotal.
+
+        Makes one lightweight authenticated request. Returns
+        {"ok": bool, "error": str}. The key itself is never logged or returned.
+        """
+        if not self.is_configured():
+            return {"ok": False, "error": "No API key provided"}
+        # EICAR test-file SHA-256 — a well-known sample always present on VT.
+        eicar = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+        try:
+            resp = self._session.get(f"{_BASE}/files/{eicar}", timeout=15)
+        except requests.RequestException as exc:
+            return {"ok": False, "error": f"Could not reach VirusTotal: {exc}"}
+        if resp.status_code in (200, 404, 429):
+            # 200/404 = key works; 429 = rate-limited but key is valid.
+            return {"ok": True, "error": ""}
+        if resp.status_code in (401, 403):
+            return {"ok": False, "error": "VirusTotal rejected the API key"}
+        return {"ok": False, "error": f"Unexpected response from VirusTotal (HTTP {resp.status_code})"}
+
     def upload_file(self, file_path: Path) -> Optional[dict]:
         """Upload file to VT for full multi-engine analysis."""
         if not self.is_configured():

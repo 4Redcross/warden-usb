@@ -10,6 +10,30 @@ except ImportError:
     _KEYRING = False
 
 _SERVICE = "warden-app"
+_VT_KEY_NAME = "vt_api_key"
+
+
+def _probe_keyring() -> bool:
+    """Return True only when keyring has a real, working backend.
+
+    On Linux `import keyring` succeeds even with no Secret Service provider
+    running (headless servers, minimal installs) — the failure only surfaces
+    when a backend operation actually runs. A harmless read of a non-existent
+    entry exercises the backend without writing anything: it returns None on a
+    working vault and raises on the fallback "fail" backend.
+    """
+    if not _KEYRING:
+        return False
+    try:
+        keyring.get_password(_SERVICE, "__warden_probe__")
+        return True
+    except Exception:
+        return False
+
+
+# Probed once at import. Distinguishes "keyring importable" from
+# "keyring actually usable" — the two differ on headless Linux.
+_KEYRING_OK = _probe_keyring()
 
 
 def _app_data_dir() -> Path:
@@ -85,16 +109,48 @@ class Settings:
         self.save()
 
     def get_vt_api_key(self) -> str:
-        if _KEYRING:
-            return keyring.get_password(_SERVICE, "vt_api_key") or ""
+        if _KEYRING_OK:
+            try:
+                key = keyring.get_password(_SERVICE, _VT_KEY_NAME)
+                if key:
+                    return key
+            except Exception:
+                pass  # backend became unavailable — fall through to plaintext
         return self._data.get("_vt_key", "")
 
     def set_vt_api_key(self, key: str) -> None:
-        if _KEYRING:
-            keyring.set_password(_SERVICE, "vt_api_key", key)
-        else:
-            self._data["_vt_key"] = key
+        if _KEYRING_OK:
+            try:
+                keyring.set_password(_SERVICE, _VT_KEY_NAME, key)
+                # Drop any stale plaintext copy so the key lives in one place.
+                if self._data.pop("_vt_key", None) is not None:
+                    self.save()
+                return
+            except Exception:
+                pass  # write failed at runtime — fall back to plaintext
+        self._data["_vt_key"] = key
+        self.save()
+
+    def delete_vt_api_key(self) -> None:
+        if _KEYRING_OK:
+            try:
+                keyring.delete_password(_SERVICE, _VT_KEY_NAME)
+            except Exception:
+                pass  # not set / backend has no delete — nothing to do
+        # Always clear the plaintext copy too, wherever the key happened to live.
+        if self._data.pop("_vt_key", None) is not None:
             self.save()
+
+    @property
+    def keyring_available(self) -> bool:
+        """True when the OS credential vault has a usable backend.
+
+        Windows (Credential Manager) and macOS (Keychain) are always usable.
+        On Linux this is False on headless / minimal systems with no Secret
+        Service provider (GNOME Keyring / KWallet) running — in that case the
+        key falls back to plaintext config and the UI warns the user.
+        """
+        return _KEYRING_OK
 
     @property
     def app_data_dir(self) -> Path:

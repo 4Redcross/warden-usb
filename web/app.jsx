@@ -99,7 +99,8 @@ function App() {
   const [drive,    setDrive]    = useState(null);
   const [settings, setSettings] = useState({});
   const [banner,   setBanner]   = useState("");
-  const [enginesReady, setEnginesReady] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // ── Scan state ──────────────────────────────────────────────────────────
   const [scanState,  setScanState]  = useState({ status: "idle", threats: [], files_scanned: 0, threat_count: 0, quarantine_count: 0 });
@@ -190,7 +191,6 @@ function App() {
         setTheme(s.theme || "dark");
         setDrives(d);
         if (d.length) setDrive(d[0]);
-        setEnginesReady(true);
 
         const q = await api().get_quarantine();
         setQuarantine(q);
@@ -335,6 +335,18 @@ function App() {
     setBanner("Downloading YARA rules…");
   }, []);
 
+  // ── Settings ────────────────────────────────────────────────────────────
+  const refreshSettings = useCallback(async () => {
+    if (!api()) return;
+    const s = await api().get_settings();
+    setSettings(s);
+  }, []);
+
+  const openSettings = useCallback(async () => {
+    await refreshSettings();
+    setSettingsOpen(true);
+  }, [refreshSettings]);
+
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className={`warden ${theme === "light" ? "light" : ""}`}>
@@ -345,7 +357,7 @@ function App() {
         theme={theme}
         onThemeToggle={toggleTheme}
         onRefresh={refreshDrives}
-        onUpdateRules={updateRules}
+        onOpenSettings={openSettings}
       />
       <Tabs active={activeTab} onChange={setActiveTab} threatCount={scanState.threats.length}/>
       <Banner message={banner} onDismiss={() => setBanner("")}/>
@@ -391,8 +403,18 @@ function App() {
       <StatusBar
         drive={drive}
         lastScan={scanState.timestamp}
-        enginesReady={enginesReady}
       />
+      {settingsOpen && (
+        <SettingsModal
+          settings={settings}
+          onClose={() => setSettingsOpen(false)}
+          onUpdateRules={updateRules}
+          onOpenAuditLog={() => { setSettingsOpen(false); setAuditOpen(true); }}
+          onToast={toast}
+          onSettingsChanged={refreshSettings}
+        />
+      )}
+      {auditOpen && <AuditLogModal onClose={() => setAuditOpen(false)} />}
       <Toaster toasts={toasts} />
     </div>
   );

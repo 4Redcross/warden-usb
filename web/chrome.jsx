@@ -1,6 +1,6 @@
 // App chrome: Header, Tabs, StatusBar
 
-function Header({ drives, selectedDrive, onDriveChange, theme, onThemeToggle, onRefresh, onUpdateRules }) {
+function Header({ drives, selectedDrive, onDriveChange, theme, onThemeToggle, onRefresh, onOpenSettings }) {
   const connected = !!selectedDrive;
   return (
     <div className="header">
@@ -52,9 +52,8 @@ function Header({ drives, selectedDrive, onDriveChange, theme, onThemeToggle, on
             <Icon.moon style={{ width: 14, height: 14 }} />
           )}
         </button>
-        <button className="btn" style={{ fontSize: 12.5 }} onClick={onUpdateRules}>
-          <Icon.download style={{ width: 13, height: 13 }} />
-          Update Rules
+        <button className="iconbtn" title="Settings" onClick={onOpenSettings}>
+          <Icon.gear style={{ width: 15, height: 15 }} />
         </button>
       </div>
     </div>
@@ -80,7 +79,7 @@ function Tabs({ active, onChange, threatCount }) {
   );
 }
 
-function StatusBar({ drive, lastScan, enginesReady }) {
+function StatusBar({ drive, lastScan }) {
   return (
     <div className="statusbar">
       {drive ? (
@@ -102,25 +101,10 @@ function StatusBar({ drive, lastScan, enginesReady }) {
       )}
       <div className="right">
         {lastScan && (
-          <>
-            <span>
-              Last scan: <b>{lastScan}</b>
-            </span>
-            <span className="sep" />
-          </>
+          <span>
+            Last scan: <b>{lastScan}</b>
+          </span>
         )}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: enginesReady ? "var(--success)" : "var(--text-muted)",
-              display: "inline-block",
-            }}
-          />
-          {enginesReady ? "Engines ready" : "Engines loading…"}
-        </span>
       </div>
     </div>
   );
@@ -150,4 +134,312 @@ function Banner({ message, onDismiss }) {
   );
 }
 
-Object.assign(window, { Header, Tabs, StatusBar, Banner });
+function AuditLogModal({ onClose }) {
+  const [text, setText] = React.useState(null);
+
+  const load = React.useCallback(async () => {
+    const log = await window.pywebview?.api?.get_audit_log?.();
+    setText(typeof log === "string" ? log : "");
+  }, []);
+
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      const log = await window.pywebview?.api?.get_audit_log?.();
+      if (active) setText(typeof log === "string" ? log : "");
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const lines = (text || "").split("\n").filter(Boolean);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        background: "rgba(0,0,0,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          width: 680,
+          maxHeight: 460,
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "10px 14px",
+            borderBottom: "1px solid var(--border)",
+            gap: 8,
+          }}
+        >
+          <Icon.file style={{ width: 14, height: 14, color: "var(--text-dim)" }} />
+          <span style={{ fontWeight: 600, fontSize: 13 }}>Audit Log</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 4 }}>
+            last 200 events · newest first
+          </span>
+          <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={load}>
+            <Icon.refresh style={{ width: 12, height: 12 }} />
+            Refresh
+          </button>
+          <button className="btn sm ghost" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "10px 14px",
+            fontFamily: "monospace",
+            fontSize: 11.5,
+          }}
+        >
+          {text === null ? (
+            <span style={{ color: "var(--text-muted)" }}>Loading…</span>
+          ) : lines.length === 0 ? (
+            <span style={{ color: "var(--text-muted)" }}>No audit events recorded yet.</span>
+          ) : (
+            lines.map((l, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: "2px 0",
+                  color: "var(--text-dim)",
+                  borderBottom: "1px solid var(--border)",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {l}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsModal({ settings, onClose, onUpdateRules, onOpenAuditLog, onToast, onSettingsChanged }) {
+  const [vtKey, setVtKey] = React.useState("");
+  const [showKey, setShowKey] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+
+  const hasKey = !!(settings && settings.has_vt_key);
+  const keyringOk = !settings || settings.keyring_available !== false;
+  const lastUpd = settings && settings.rules_last_updated;
+
+  const saveKey = async () => {
+    const key = vtKey.trim();
+    if (!key) {
+      onToast && onToast("Enter an API key first.", "warn");
+      return;
+    }
+    setSaving(true);
+    const r = await window.pywebview?.api?.set_vt_key?.(key);
+    setSaving(false);
+    if (r && r.ok) {
+      setVtKey("");
+      setShowKey(false);
+      onToast && onToast("VirusTotal API key verified and saved.", "info");
+      onSettingsChanged && onSettingsChanged();
+    } else {
+      onToast && onToast(`Key not saved: ${(r && r.error) || "unknown error"}`, "error");
+    }
+  };
+
+  const removeKey = async () => {
+    if (!confirm("Remove the saved VirusTotal API key?")) return;
+    const r = await window.pywebview?.api?.clear_vt_key?.();
+    if (r && r.ok) {
+      onToast && onToast("VirusTotal API key removed.", "info");
+      onSettingsChanged && onSettingsChanged();
+    } else {
+      onToast && onToast(`Could not remove key: ${(r && r.error) || "unknown error"}`, "error");
+    }
+  };
+
+  const sectionStyle = {
+    background: "var(--surface-2)",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    padding: "12px 14px",
+  };
+  const titleStyle = { fontSize: 12.5, fontWeight: 600, color: "var(--text)", marginBottom: 3 };
+  const descStyle = { fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 10 };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        background: "rgba(0,0,0,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          width: 520,
+          maxHeight: 560,
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "10px 14px",
+            borderBottom: "1px solid var(--border)",
+            gap: 8,
+          }}
+        >
+          <Icon.gear style={{ width: 14, height: 14, color: "var(--text-dim)" }} />
+          <span style={{ fontWeight: 600, fontSize: 13 }}>Settings</span>
+          <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          {/* 1 — Update YARA rules */}
+          <div style={sectionStyle}>
+            <div style={titleStyle}>Update YARA Rules</div>
+            <div style={descStyle}>
+              Malware signature rules from the Neo23x0/signature-base project.
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 11.5, color: "var(--text-muted)", flex: 1 }}>
+                Last updated:{" "}
+                <b style={{ color: "var(--text-dim)" }}>
+                  {lastUpd ? new Date(lastUpd).toLocaleString() : "Never"}
+                </b>
+              </span>
+              <button className="btn sm" onClick={onUpdateRules}>
+                <Icon.download style={{ width: 12, height: 12 }} />
+                Update Rules
+              </button>
+            </div>
+          </div>
+
+          {/* 2 — VirusTotal API key */}
+          <div style={sectionStyle}>
+            <div style={titleStyle}>VirusTotal API Key</div>
+            <div style={descStyle}>
+              Enables hash lookups and file uploads. Stored in your operating system's
+              credential vault — never written to plaintext config.
+            </div>
+            {!keyringOk && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--warning)",
+                  background: "rgba(245,158,11,0.1)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  borderRadius: 5,
+                  padding: "5px 8px",
+                  marginBottom: 8,
+                }}
+              >
+                Secure storage unavailable — the key would be saved in plaintext config.
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <Icon.lock
+                style={{
+                  width: 12,
+                  height: 12,
+                  color: hasKey ? "var(--success)" : "var(--text-muted)",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 11.5,
+                  color: hasKey ? "var(--success)" : "var(--text-muted)",
+                }}
+              >
+                {hasKey ? "A key is currently saved." : "No key configured."}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={vtKey}
+                  onChange={(e) => setVtKey(e.target.value)}
+                  placeholder={hasKey ? "Enter a new key to replace" : "Paste your VirusTotal API key"}
+                  style={{ paddingRight: 32 }}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  className="iconbtn"
+                  onClick={() => setShowKey((s) => !s)}
+                  title={showKey ? "Hide key" : "Show key"}
+                  style={{ position: "absolute", right: 3, top: 3, width: 28, height: 28 }}
+                >
+                  <Icon.eye style={{ width: 13, height: 13 }} />
+                </button>
+              </div>
+              <button className="btn sm" onClick={saveKey} disabled={saving}>
+                {saving ? "Verifying…" : "Save"}
+              </button>
+              {hasKey && (
+                <button className="btn sm" onClick={removeKey} style={{ color: "var(--danger)" }}>
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 3 — View audit logs */}
+          <div style={sectionStyle}>
+            <div style={titleStyle}>View Audit Logs</div>
+            <div style={descStyle}>
+              History of scans, quarantines, formats and file-server activity.
+            </div>
+            <button className="btn sm" onClick={onOpenAuditLog}>
+              <Icon.file style={{ width: 12, height: 12 }} />
+              Open Audit Log
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Header, Tabs, StatusBar, Banner, AuditLogModal, SettingsModal });
