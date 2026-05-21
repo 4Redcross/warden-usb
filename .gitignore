@@ -29,6 +29,10 @@ logs/
 *.log
 warden_audit.json
 
+# YARA rules — downloaded at runtime via Settings > Update YARA Rules
+rules/*
+!rules/.gitkeep
+
 # Settings with potential secrets
 settings.local.json
 

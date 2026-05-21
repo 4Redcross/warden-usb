@@ -440,6 +440,7 @@ class WardenApi:
             "use_yara": self._settings.get("scan.use_yara", True),
             "use_vt_hash": self._settings.get("scan.use_vt_hash", False),
             "has_vt_key": bool(self._settings.get_vt_api_key()),
+            "has_yara_rules": self._yara.has_rules(),
             "keyring_available": self._settings.keyring_available,
             "rules_last_updated": self._settings.get("rules_last_updated"),
             "server_available": self._file_server.is_available(),

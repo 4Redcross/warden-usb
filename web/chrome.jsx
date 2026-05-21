@@ -1,6 +1,25 @@
 // App chrome: Header, Tabs, StatusBar
 
-function Header({ drives, selectedDrive, onDriveChange, theme, onThemeToggle, onRefresh, onOpenSettings }) {
+// Small red notification dot — positioned at the top-right of its (relative) parent.
+// `ring` is the colour of the gap around the dot; set it to the background it sits on.
+function NotifDot({ ring = "var(--surface)" }) {
+  return (
+    <span
+      style={{
+        position: "absolute",
+        top: 3,
+        right: 3,
+        width: 8,
+        height: 8,
+        borderRadius: "50%",
+        background: "var(--danger)",
+        border: `2px solid ${ring}`,
+      }}
+    />
+  );
+}
+
+function Header({ drives, selectedDrive, onDriveChange, theme, onThemeToggle, onRefresh, onOpenSettings, rulesMissing }) {
   const connected = !!selectedDrive;
   return (
     <div className="header">
@@ -9,7 +28,7 @@ function Header({ drives, selectedDrive, onDriveChange, theme, onThemeToggle, on
           <Icon.shield style={{ width: 20, height: 20 }} />
         </div>
         <div className="name">
-          Warden <small>v2.4.1</small>
+          Warden <small>v1.0.1</small>
         </div>
       </div>
 
@@ -52,8 +71,14 @@ function Header({ drives, selectedDrive, onDriveChange, theme, onThemeToggle, on
             <Icon.moon style={{ width: 14, height: 14 }} />
           )}
         </button>
-        <button className="iconbtn" title="Settings" onClick={onOpenSettings}>
+        <button
+          className="iconbtn"
+          title={rulesMissing ? "Settings — YARA rules not installed" : "Settings"}
+          onClick={onOpenSettings}
+          style={{ position: "relative" }}
+        >
           <Icon.gear style={{ width: 15, height: 15 }} />
+          {rulesMissing && <NotifDot />}
         </button>
       </div>
     </div>
@@ -243,6 +268,7 @@ function SettingsModal({ settings, onClose, onUpdateRules, onOpenAuditLog, onToa
   const hasKey = !!(settings && settings.has_vt_key);
   const keyringOk = !settings || settings.keyring_available !== false;
   const lastUpd = settings && settings.rules_last_updated;
+  const rulesMissing = !!settings && settings.has_yara_rules === false;
 
   const saveKey = async () => {
     const key = vtKey.trim();
@@ -348,9 +374,14 @@ function SettingsModal({ settings, onClose, onUpdateRules, onOpenAuditLog, onToa
                   {lastUpd ? new Date(lastUpd).toLocaleString() : "Never"}
                 </b>
               </span>
-              <button className="btn sm" onClick={onUpdateRules}>
+              <button
+                className="btn sm"
+                onClick={onUpdateRules}
+                style={{ position: "relative" }}
+              >
                 <Icon.download style={{ width: 12, height: 12 }} />
                 Update Rules
+                {rulesMissing && <NotifDot ring="var(--surface-2)" />}
               </button>
             </div>
           </div>

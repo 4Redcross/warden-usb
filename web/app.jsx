@@ -171,6 +171,7 @@ function App() {
         case "rules:done":
           setBanner(data.ok ? "YARA rules updated." : "Rules update failed.");
           setTimeout(() => setBanner(""), 8000);
+          if (data.ok) refreshSettings();
           break;
         default:
           break;
@@ -358,6 +359,7 @@ function App() {
         onThemeToggle={toggleTheme}
         onRefresh={refreshDrives}
         onOpenSettings={openSettings}
+        rulesMissing={settings.has_yara_rules === false}
       />
       <Tabs active={activeTab} onChange={setActiveTab} threatCount={scanState.threats.length}/>
       <Banner message={banner} onDismiss={() => setBanner("")}/>

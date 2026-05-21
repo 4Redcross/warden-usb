@@ -12,7 +12,7 @@ cross-platform desktop app.
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-7c3aed)
 ![UI](https://img.shields.io/badge/UI-React%20in%20pywebview-61DAFB?logo=react&logoColor=white)
 ![Engines](https://img.shields.io/badge/Engines-ClamAV%20%2B%20YARA%20%2B%20VirusTotal-10b981)
-![Version](https://img.shields.io/badge/version-2.4.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.1-blue)
 
 <img src="Warden/screenshots/App_Scan-Showcase.png" alt="Warden — Scan tab" width="80%">
 
@@ -26,7 +26,7 @@ cross-platform desktop app.
 
 ## Features
 
-|                             |                                                                                                                                               |
+| Feature                     | Description                                                                                                                                   |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Multi-engine scanning**   | Files are checked against **ClamAV**, **YARA** rules, and optionally **VirusTotal** hash lookups.                                             |
 | **Automatic quarantine**    | Detected threats are moved off the USB drive into an isolated store, stripped of execute permissions, and tracked by SHA-256.                 |
@@ -45,7 +45,7 @@ cross-platform desktop app.
 |                              Scan                               |                              Format                               |
 | :-------------------------------------------------------------: | :---------------------------------------------------------------: |
 |        ![Scan](Warden/screenshots/App_Scan-Showcase.png)        |       ![Format](Warden/screenshots/App_Format-Showcase.png)       |
-|                    **Host** — configuration                     |                        **Host** — running                         |
+|                    **Host** - configuration                     |                        **Host** - running                         |
 | ![Host config](Warden/screenshots/App_Host_Config-Showcase.png) | ![Host running](Warden/screenshots/App_Host_Running-Showcase.png) |
 
 _A light theme is available via the toggle in the header._
@@ -54,21 +54,20 @@ _A light theme is available via the toggle in the header._
 
 ## Architecture
 
-Warden is built in clean layers — a React interface in a native window, talking
-to a Python core through an in-process bridge.
+Warden is built in clean layers. A React interface in a native window, talking to a Python core through an in-process bridge using pywebview's `js_api`.
 
 ```mermaid
 flowchart TD
-    subgraph FE["Frontend — React in a pywebview window"]
+    subgraph FE["Frontend - React in a pywebview window"]
         UI["Scan · Host · Format tabs + Settings"]
     end
-    API["WardenApi — pywebview bridge (webapi.py)"]
+    API["WardenApi - pywebview bridge (webapi.py)"]
     subgraph WK["Workers — background threads"]
         SW["ScanWorker"]
         FW["FormatWorker"]
         SVW["ServerWorker"]
     end
-    subgraph CORE["Core — pure Python"]
+    subgraph CORE["Core - pure Python"]
         SC["Scanner"]
         QM["QuarantineManager"]
         FS["FileServer"]
@@ -77,7 +76,7 @@ flowchart TD
         VT["VirusTotalClient"]
         AL["AuditLog"]
     end
-    subgraph BE["Backends — OS-specific"]
+    subgraph BE["Backends - OS-specific"]
         WIN["WindowsBackend"]
         LNX["LinuxBackend"]
     end
@@ -94,8 +93,12 @@ flowchart TD
 ## Requirements
 
 - **Python 3.10+**
-- **ClamAV** — install separately and ensure the `clamd` daemon (or `clamscan`) is available
 - Windows 10/11 or a modern Linux distribution
+- **ClamAV** _(optional, recommended)_ for ClamAV-based detection,
+  Install the ClamAV engine via your OS (`apt install clamav clamav-daemon`, or the Windows installer).
+  Without it, Warden still scans with YARA and VirusTotal.
+
+> Note: the `clamd` pip package is only the client library, it is **not** the engine.
 
 ## Installation
 
@@ -126,14 +129,20 @@ python main.py
 
 ## Usage
 
-1. **Plug in a USB drive** — Warden detects it automatically and lists it in the header.
-2. **Scan** — choose your engines and run a scan; threats are auto-quarantined.
-3. **Review quarantine** — restore, delete, or send samples to VirusTotal.
-4. **Format** — securely reformat a drive (requires typing the drive letter to confirm).
-5. **Host** — share a drive over encrypted WebDAV; other devices scan a QR code for setup.
+> **First run — install YARA rules.** To keep this repository lean, Warden does
+> **not** ship with the YARA signature database. On first launch, open
+> **Settings** (gear icon, top-right) → **Update YARA Rules** to download the
+> rules from [Neo23x0/signature-base](https://github.com/Neo23x0/signature-base).
+> Until you do, a red dot appears on the gear icon and YARA-based detection is
+> skipped during scans.
 
-Open **Settings** (gear icon, top-right) to update YARA rules, set your
-VirusTotal API key, or view the audit log.
+1. **Plug in a USB drive:** Warden detects it automatically and lists it in the header.
+2. **Scan:** choose your engines and run a scan; threats are auto-quarantined.
+3. **Review quarantine:** restore, delete, or send samples to VirusTotal.
+4. **Format:** securely reformat a drive (requires typing the drive letter to confirm).
+5. **Host:** share a drive over encrypted WebDAV; other devices scan a QR code for setup.
+
+Open **Settings** (gear icon, top-right) to update YARA rules, set your VirusTotal API key, or view the audit log.
 
 ## Security
 
